@@ -217,7 +217,9 @@ def event():
     return jsonify({"status": "ok", "message": message})
 
     with app.app_context():
-    db.create_all()
+        db.create_all()
+    
+    
 
 # -----------------------------
 # RUN APP
