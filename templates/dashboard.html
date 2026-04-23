@@ -1,0 +1,8 @@
+<h2>User Dashboard</h2>
+
+{% for alert in alerts %}
+<div style="border:1px solid #ddd; padding:10px; margin:10px;">
+    <b>{{ alert.message }}</b><br>
+    Risk Score: {{ alert.score }}/10
+</div>
+{% endfor %}
