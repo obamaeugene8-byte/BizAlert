@@ -1,0 +1,19 @@
+<h2>Admin Panel</h2>
+
+<h3>Users</h3>
+
+{% for user in users %}
+<p>
+    {{ user.email }} |
+    Paid: {{ user.paid }}
+
+    <a href="/admin/toggle/{{ user.id }}">Toggle Access</a>
+</p>
+{% endfor %}
+
+<h3>Create User</h3>
+<form method="POST" action="/admin/create_user">
+    <input name="email" placeholder="email">
+    <input name="password" placeholder="password">
+    <button type="submit">Create</button>
+</form>
