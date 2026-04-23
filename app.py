@@ -8,7 +8,7 @@ import os
 # APP SETUP
 # -----------------------------
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY", "fallback_secret")
+app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY", "dev_secret")
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///platform.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -19,12 +19,12 @@ login_manager.init_app(app)
 login_manager.login_view = "login"
 
 # -----------------------------
-# DATABASE MODELS
+# MODELS
 # -----------------------------
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(150), unique=True)
-    password = db.Column(db.String(200))
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     paid = db.Column(db.Boolean, default=False)
 
@@ -40,67 +40,53 @@ class Rule(db.Model):
     keyword = db.Column(db.String(100))
     weight = db.Column(db.Integer)
 
-# ✅ FIX: create tables inside app context
+# -----------------------------
+# FIX: CREATE TABLES SAFELY
+# -----------------------------
 with app.app_context():
     db.create_all()
 
 # -----------------------------
-# LOGIN HANDLER
+# LOGIN LOADER
 # -----------------------------
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 # -----------------------------
-# RISK ENGINE
+# SIGNUP
 # -----------------------------
-def calculate_risk(user_id, text):
-    text = text.lower()
-    rules = Rule.query.filter_by(user_id=user_id).all()
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = hashlib.sha256(request.form['password'].encode()).hexdigest()
 
-    score = 0
-    for r in rules:
-        if r.keyword in text:
-            score += r.weight
+        existing = User.query.filter_by(email=email).first()
+        if existing:
+            return "User already exists"
 
-    return min(score, 10)
+        user = User(
+            email=email,
+            password=password,
+            is_admin=False,
+            paid=False
+        )
 
-def build_message(score, event):
-    if score >= 8:
-        return f"🚨 CRITICAL: {event} | Risk {score}/10"
-    elif score >= 5:
-        return f"⚠️ WARNING: {event} | Risk {score}/10"
-    else:
-        return f"ℹ️ INFO: {event} | Risk {score}/10"
+        db.session.add(user)
+        db.session.commit()
 
-def process_event(user_id, event_text):
-    score = calculate_risk(user_id, event_text)
-    message = build_message(score, event_text)
+        return redirect(url_for('login'))
 
-    alert = Alert(user_id=user_id, message=message, score=score)
-    db.session.add(alert)
-    db.session.commit()
-
-    return message
-
-# -----------------------------
-# ROUTES
-# -----------------------------
-
-@app.route('/')
-@login_required
-def dashboard():
-    if not current_user.paid and not current_user.is_admin:
-        return "<h2>Access denied. Please subscribe.</h2>"
-
-    alerts = Alert.query.filter_by(user_id=current_user.id).all()
-    return render_template("dashboard.html", alerts=alerts)
+    return render_template("signup.html")
 
 # -----------------------------
 # LOGIN
 # -----------------------------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    error = None
+
     if request.method == 'POST':
         email = request.form['email']
         password = hashlib.sha256(request.form['password'].encode()).hexdigest()
@@ -110,14 +96,31 @@ def login():
         if user:
             login_user(user)
             return redirect(url_for('dashboard'))
+        else:
+            error = "Invalid email or password"
 
-    return render_template("login.html")
+    return render_template("login.html", error=error)
 
+# -----------------------------
+# LOGOUT
+# -----------------------------
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+# -----------------------------
+# DASHBOARD
+# -----------------------------
+@app.route('/')
+@login_required
+def dashboard():
+    if not current_user.paid and not current_user.is_admin:
+        return "<h3>Access denied. Please subscribe.</h3>"
+
+    alerts = Alert.query.filter_by(user_id=current_user.id).all()
+    return render_template("dashboard.html", alerts=alerts)
 
 # -----------------------------
 # ADMIN PANEL
@@ -132,25 +135,7 @@ def admin():
     return render_template("admin.html", users=users)
 
 # -----------------------------
-# CREATE USER
-# -----------------------------
-@app.route('/admin/create_user', methods=['POST'])
-@login_required
-def create_user():
-    if not current_user.is_admin:
-        return "Unauthorized"
-
-    email = request.form['email']
-    password = hashlib.sha256(request.form['password'].encode()).hexdigest()
-
-    user = User(email=email, password=password, paid=False)
-    db.session.add(user)
-    db.session.commit()
-
-    return redirect(url_for('admin'))
-
-# -----------------------------
-# TOGGLE PAYMENT
+# TOGGLE PAYMENT ACCESS
 # -----------------------------
 @app.route('/admin/toggle/<int:user_id>')
 @login_required
@@ -165,7 +150,7 @@ def toggle(user_id):
     return redirect(url_for('admin'))
 
 # -----------------------------
-# ADD RULE
+# ADD RULE (KEYWORDS)
 # -----------------------------
 @app.route('/admin/add_rule', methods=['POST'])
 @login_required
@@ -185,14 +170,46 @@ def add_rule():
     return redirect(url_for('admin'))
 
 # -----------------------------
-# EVENT API (INTEGRATION POINT)
+# RISK ENGINE
+# -----------------------------
+def calculate_risk(user_id, text):
+    text = text.lower()
+    rules = Rule.query.filter_by(user_id=user_id).all()
+
+    score = 0
+    for r in rules:
+        if r.keyword in text:
+            score += r.weight
+
+    return min(score, 10)
+
+def build_message(event, score):
+    if score >= 8:
+        return f"🚨 CRITICAL: {event} | Risk {score}/10"
+    elif score >= 5:
+        return f"⚠️ WARNING: {event} | Risk {score}/10"
+    else:
+        return f"ℹ️ INFO: {event} | Risk {score}/10"
+
+def process_event(user_id, event):
+    score = calculate_risk(user_id, event)
+    message = build_message(event, score)
+
+    alert = Alert(user_id=user_id, message=message, score=score)
+    db.session.add(alert)
+    db.session.commit()
+
+    return message
+
+# -----------------------------
+# EVENT API (INTEGRATION)
 # -----------------------------
 @app.route('/event', methods=['POST'])
 def event():
     data = request.json
 
-    user_id = data.get('user_id')
-    event_text = data.get('event')
+    user_id = data.get("user_id")
+    event_text = data.get("event")
 
     user = User.query.get(user_id)
 
