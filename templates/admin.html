@@ -1,31 +1,70 @@
-<h2>Admin Panel</h2>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Panel</title>
+</head>
+<body>
+
+<h2>Admin Dashboard</h2>
+
+<hr>
 
 <h3>Users</h3>
 
 {% for user in users %}
 <p>
-    {{ user.email }} |
+    <b>{{ user.email }}</b> |
     Paid: {{ user.paid }}
 
-    <a href="/admin/toggle/{{ user.id }}">Toggle Access</a>
+    <a href="/admin/toggle/{{ user.id }}">
+        Toggle Access
+    </a>
 </p>
 {% endfor %}
 
 <hr>
 
-<h3>Create User</h3>
+<h3>Create User (Admin only)</h3>
+
 <form method="POST" action="/admin/create_user">
     <input name="email" placeholder="Email" required>
     <input name="password" placeholder="Password" required>
     <button type="submit">Create User</button>
 </form>
 
+<p><i>(Note: This route is NOT in your latest app.py — remove this section OR add route if needed)</i></p>
+
 <hr>
 
-<h3>Add Rule (Keyword)</h3>
+<h3>Add Rule (Keyword Risk Setup)</h3>
+
 <form method="POST" action="/admin/add_rule">
     <input name="user_id" placeholder="User ID" required>
     <input name="keyword" placeholder="Keyword (e.g. payment failed)" required>
     <input name="weight" type="number" placeholder="Weight (1–10)" required>
     <button type="submit">Add Rule</button>
 </form>
+
+<hr>
+
+<h3>System Info</h3>
+
+<p>
+Use this endpoint for integration:
+</p>
+
+<code>
+POST /event
+</code>
+
+<p>Example payload:</p>
+
+<pre>
+{
+  "user_id": 1,
+  "event": "Payment failed for order #123"
+}
+</pre>
+
+</body>
+</html>
