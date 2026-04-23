@@ -11,9 +11,21 @@
 </p>
 {% endfor %}
 
+<hr>
+
 <h3>Create User</h3>
 <form method="POST" action="/admin/create_user">
-    <input name="email" placeholder="email">
-    <input name="password" placeholder="password">
-    <button type="submit">Create</button>
+    <input name="email" placeholder="Email" required>
+    <input name="password" placeholder="Password" required>
+    <button type="submit">Create User</button>
+</form>
+
+<hr>
+
+<h3>Add Rule (Keyword)</h3>
+<form method="POST" action="/admin/add_rule">
+    <input name="user_id" placeholder="User ID" required>
+    <input name="keyword" placeholder="Keyword (e.g. payment failed)" required>
+    <input name="weight" type="number" placeholder="Weight (1–10)" required>
+    <button type="submit">Add Rule</button>
 </form>
